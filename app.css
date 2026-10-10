@@ -225,7 +225,7 @@ h3.sub{margin:8px 0 -6px;font-family:var(--f-display);font-weight:600;font-size:
 .daychip{width:40px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--raised);cursor:pointer;font-weight:700;font-size:.85rem}
 .daychip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .btn.tiny{padding:4px 8px;font-size:.82rem;color:var(--accent)}
-.untilnote{justify-content:flex-end}
-.untilnote b{font-family:var(--f-mono);font-weight:500;font-size:.95rem;color:var(--fg);text-transform:none;letter-spacing:0;padding:8px 0}
+.untilnote{display:flex;flex-direction:column;gap:4px;font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;justify-content:flex-start}
+.untilnote b{font-family:var(--f-mono);font-weight:500;font-size:.95rem;color:var(--fg);text-transform:none;letter-spacing:0;padding:9px 0;border-bottom:1px dashed var(--line)}
 .repsum{margin:0;font-size:.88rem;color:var(--muted)}
 .repsum.bad{color:var(--danger)}
