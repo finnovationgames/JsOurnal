@@ -209,3 +209,23 @@ h3.sub{margin:8px 0 -6px;font-family:var(--f-display);font-weight:600;font-size:
   .status{width:auto;margin-left:auto}
   .btn{padding:8px 11px}
 }
+/* repeating */
+.rep{color:var(--c,var(--accent));font-weight:700;margin-right:3px}
+.rep.big{font-size:1.4rem;line-height:1;color:var(--accent)}
+.warnline{display:flex;gap:10px;align-items:flex-start;margin:0}
+.scopelist{display:flex;flex-direction:column;gap:8px}
+.scopelist .btn{flex-direction:column;align-items:flex-start;gap:2px;padding:10px 14px;white-space:normal;text-align:left}
+.scopelist .btn span{font-size:.82rem;color:var(--muted)}
+.scopelist .btn.danger b{color:var(--danger)}
+.repeat{display:flex;flex-direction:column;gap:10px;border:1px solid var(--line-soft);border-radius:12px;padding:10px 12px;background:var(--paper)}
+.rephead{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.rephead .lbl{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.seg.small button{padding:4px 10px;font-size:.88rem}
+.daychips{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.daychip{width:40px;height:36px;border-radius:9px;border:1px solid var(--line);background:var(--raised);cursor:pointer;font-weight:700;font-size:.85rem}
+.daychip[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.tiny{padding:4px 8px;font-size:.82rem;color:var(--accent)}
+.untilnote{justify-content:flex-end}
+.untilnote b{font-family:var(--f-mono);font-weight:500;font-size:.95rem;color:var(--fg);text-transform:none;letter-spacing:0;padding:8px 0}
+.repsum{margin:0;font-size:.88rem;color:var(--muted)}
+.repsum.bad{color:var(--danger)}

@@ -112,13 +112,17 @@ const keyName=n=>n.replace(/\s+/g,"").toLowerCase();
 /* ---------- toast & sheet ---------- */
 let toastTimer;
 function toast(msg,label,fn){const t=$("#toast");t.replaceChildren(h("span",{text:msg}),label?h("button",{class:"btn",onclick:()=>{t.hidden=true;fn();}},label):null);t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.hidden=true,label?7000:3500);}
-function openSheet({title,body,foot,wide,tabs}){const root=$("#sheetRoot");
-  const close=()=>{root.replaceChildren();document.removeEventListener("keydown",esc);};
+let sheetDispose=null;
+function openSheet({title,body,foot,wide,tabs,onClose}){const root=$("#sheetRoot");
+  if(sheetDispose)sheetDispose();
+  let open=true;
+  const dispose=()=>{document.removeEventListener("keydown",esc);if(sheetDispose===dispose)sheetDispose=null;};
+  const close=()=>{if(!open)return;open=false;root.replaceChildren();dispose();if(onClose)onClose();};
   const esc=e=>{if(e.key==="Escape")close();};document.addEventListener("keydown",esc);
   const sheet=h("div",{class:"sheet"+(wide?" wide":""),role:"dialog","aria-modal":"true","aria-label":title},
     h("header",{},h("h2",{text:title}),h("button",{class:"btn ghost icon","aria-label":"Close",onclick:close},"✕")),tabs||null,body,foot||null);
   const scrim=h("div",{class:"scrim",onclick:e=>{if(e.target===scrim)close();}},sheet);
-  root.replaceChildren(scrim);setTimeout(()=>{const f=sheet.querySelector("input,textarea");if(f&&!f.dataset.nofocus)f.focus();},30);
+  root.replaceChildren(scrim);sheetDispose=()=>{open=false;dispose();};setTimeout(()=>{const f=sheet.querySelector("input,textarea");if(f&&!f.dataset.nofocus)f.focus();},30);
   return close;}
 
 /* ---------- clipboard (in-app) ---------- */
@@ -132,12 +136,8 @@ function moveTo(day,minute){const ev=S.events.get(S.moving);S.moving=null;if(!ev
   const s=new Date(ev.start);const sm=minute!=null?minute:s.getHours()*60+s.getMinutes();
   const start=new Date(day.getFullYear(),day.getMonth(),day.getDate(),0,sm).getTime();
   commitMove(ev,start);}
-function commitMove(ev,start){const old=clone(ev);const end=start+(ev.end-ev.start);
-  if(start===ev.start){S.selected=ev.id;render();return;}
-  putEvent({...ev,start,end});S.selected=ev.id;render();
-  toast(`Moved to ${shortDate(new Date(start))}, ${hm(start)}.`,"Undo",()=>{putEvent(old);render();});}
-function deleteSelected(){const ev=S.events.get(S.selected);if(!ev)return;const old=clone(ev);dropEvent(ev.id);S.selected=null;render();
-  toast("Activity deleted.","Undo",()=>{putEvent(old);S.selected=old.id;render();});}
+function commitMove(ev,start){if(start===ev.start){S.selected=ev.id;render();return;}moveWithScope(ev,start);}
+function deleteSelected(){const ev=S.events.get(S.selected);if(ev)deleteWithScope(ev);}
 function copySelected(){const ev=S.events.get(S.selected);if(!ev)return;setClip({span:"event",label:`"${ev.title}"`,items:toItems([ev],sod(new Date(ev.start)))});}
 function pasteAt(day,minute){const c=S.clip;if(!c)return;
   let anchor=sod(day);if(c.span==="week")anchor=sow(day);
@@ -154,7 +154,7 @@ function renderPasteBar(){const bar=$("#pastebar");bar.className="pastebar";
       h("div",{class:"acts"},h("button",{class:"btn",onclick:()=>{S.moving=null;render();}},"Cancel")));bar.hidden=false;return;}
   if(!S.clip&&S.selected){const ev=S.events.get(S.selected);const c=colourOf(ev.colorId);
     const del=h("button",{class:"btn danger",onclick:()=>{if(!del.classList.contains("armed")){del.classList.add("armed");del.textContent="Tap again";return;}deleteSelected();}},"Delete");
-    bar.replaceChildren(h("p",{},h("i",{class:"cdot",style:`--c:${c.hex}`}),h("span",{},h("b",{text:ev.title})," ",h("span",{class:"when",text:`${shortDate(new Date(ev.start))} ${hm(ev.start)}–${hm(ev.end)}`}))),
+    bar.replaceChildren(h("p",{},h("i",{class:"cdot",style:`--c:${c.hex}`}),h("span",{},h("b",{text:ev.title})," ",h("span",{class:"when",text:`${shortDate(new Date(ev.start))} ${hm(ev.start)}–${hm(ev.end)}${ev.group?` · ↻ ${groupOf(ev.group).findIndex(m=>m.id===ev.id)+1} of ${groupOf(ev.group).length}`:""}`}))),
       h("div",{class:"acts"},h("button",{class:"btn",onclick:()=>editEvent(ev)},"Edit"),h("button",{class:"btn",onclick:()=>startMove(ev.id)},"Move"),
         h("button",{class:"btn",onclick:copySelected},"Copy"),del,h("button",{class:"btn","aria-label":"Deselect",onclick:()=>select(null)},"✕")));
     bar.hidden=false;return;}
@@ -266,7 +266,7 @@ function renderGrid(n){
       const isSel=S.selected===e.id;
       const block=h("button",{class:"ev"+(isSel?" sel":"")+(S.moving===e.id?" moving":""),"aria-pressed":String(isSel),style:`--c:${c.hex};top:${top}px;height:${ht}px;left:calc(${x.lane*w}% + 2px);width:calc(${w}% - 4px)`,
         title:`${e.title}\n${hm(e.start)}–${hm(e.end)} · ${c.name}${tzNote}\n${isSel?"Drag to move · tap again to open":"Tap to select · double-click to open"}`,
-        onclick:()=>{if(suppressClick){suppressClick=false;return;}if(S.moving||S.clip)return;if(isSel)editEvent(e);else select(e.id);}},h("span",{class:"t",text:e.title}),meta);
+        onclick:()=>{if(suppressClick){suppressClick=false;return;}if(S.moving||S.clip)return;if(isSel)editEvent(e);else select(e.id);}},h("span",{class:"t"},e.group?h("span",{class:"rep",title:"Repeating","aria-label":"Repeating"},"↻"):null,e.title),meta);
       if(isSel&&!S.clip&&!S.moving){/* drag a selected activity to a new time or day */
         let mv=null;const pv=h("div",{class:"dragsel"});
         block.addEventListener("pointerdown",ev=>{if(ev.button!==0||ev.target.closest(".rz"))return;
@@ -296,7 +296,7 @@ function renderGrid(n){
         const finish=ev=>{if(!r)return;const res=r;r=null;block.classList.remove("resizing");suppressClick=true;setTimeout(()=>suppressClick=false,300);
           const newEnd=new Date(d.getFullYear(),d.getMonth(),d.getDate(),0,res.end).getTime();
           if(ev.type==="pointercancel"||newEnd===e.end){render();return;}
-          const old=clone(e);putEvent({...e,end:newEnd});render();toast(`${e.title} now ends at ${hm(newEnd)}.`,"Undo",()=>{putEvent(old);render();});};
+          resizeWithScope(e,newEnd);};
         rz.addEventListener("pointerup",finish);rz.addEventListener("pointercancel",finish);
         rz.addEventListener("click",ev=>ev.stopPropagation());
         block.append(rz);}
@@ -319,7 +319,7 @@ function renderMonth(){
       onkeydown:e=>{if(e.key==="Enter"&&e.target===cell){S.cursor=d;setView("day");}}},
       h("div",{class:"mtop"},h("span",{class:"mnum",text:d.getDate()}),h("button",{class:"madd","aria-label":"Add on "+shortDate(d),onclick:()=>editEvent(null,{day:d,minute:9*60})},"+")));
     evs.slice(0,3).forEach(e=>{const col=colourOf(e.colorId);const isSel=S.selected===e.id;cell.append(h("button",{class:"chip"+(isSel?" sel":""),"aria-pressed":String(isSel),style:`--c:${col.hex}`,title:`${e.title} · ${col.name}`,
-      onclick:()=>{if(S.moving){moveTo(d,null);return;}if(S.clip){pasteAt(d,null);return;}if(isSel)editEvent(e);else select(e.id);}},h("b",{text:hm(Math.max(e.start,d.getTime()))}),h("span",{text:e.title})));});
+      onclick:()=>{if(S.moving){moveTo(d,null);return;}if(S.clip){pasteAt(d,null);return;}if(isSel)editEvent(e);else select(e.id);}},h("b",{text:hm(Math.max(e.start,d.getTime()))}),h("span",{},e.group?h("span",{class:"rep","aria-label":"Repeating"},"↻ "):null,e.title)));});
     if(evs.length>3)cell.append(h("span",{class:"more",text:`+${evs.length-3} more`}));
     wrap.append(cell);}
   main.replaceChildren(wrap);if(S.events.size===0)main.append(emptyNote());
@@ -357,50 +357,196 @@ function copyAsText(span){const[a,b]=rangeOf(span);const evs=eventsBetween(a.get
     openSheet({title:"Plans as text",body:h("div",{class:"body"},h("p",{class:"hint",text:"Select and copy this. You can paste it back in with Paste plans, here or on another device."}),ta)});setTimeout(()=>ta.select(),40);};
   if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(text).then(()=>toast(`Copied ${evs.length} ${evs.length===1?"line":"lines"} to your clipboard.`),show);}else show();}
 
+/* ---------- repeating groups ---------- */
+const DAYNAMES=["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+const wdIdx=d=>(d.getDay()+6)%7;
+const addIso=(iso,n)=>isoDate(addDays(fromIso(iso),n));
+const isoDiff=(a,b)=>Math.round((fromIso(b)-fromIso(a))/DAY);
+const MAX_REPEAT_DAYS=366;
+/* the last day a preset covers, counting from the activity's first day */
+function presetUntil(from,preset){const f=fromIso(from);
+  if(preset==="week")return isoDate(addDays(sow(f),6));
+  if(preset==="2weeks")return isoDate(addDays(f,13));
+  if(preset==="month")return isoDate(addDays(new Date(f.getFullYear(),f.getMonth()+1,f.getDate()),-1));
+  return null;}
+function repeatDates(from,until,days){const out=[];if(!from||!until||until<from)return out;
+  let d=fromIso(from);const end=fromIso(until);
+  while(d<=end&&out.length<500){if(days.includes(wdIdx(d)))out.push(isoDate(d));d=addDays(d,1);}return out;}
+function daysLabel(days){const k=[...days].sort().join("");if(k==="0123456")return"every day";if(k==="01234")return"weekdays";if(k==="56")return"weekends";
+  return[...days].sort().map(i=>DAYNAMES[i]).join(", ");}
+const repSummary=r=>r?`${daysLabel(r.days)} until ${shortDate(fromIso(r.until))}`:"";
+const groupOf=g=>g?[...S.events.values()].filter(e=>e.group===g).sort((a,b)=>a.start-b.start):[];
+function scopedMembers(ev,scope){const g=groupOf(ev.group);
+  if(scope==="all")return g;if(scope==="later")return g.filter(m=>m.start>=ev.start);return[S.events.get(ev.id)||ev];}
+
+/* Ask how far a change to a repeating activity should reach. Resolves "one" | "later" | "all" | null (cancelled). */
+function askScope(ev,verb){
+  const all=groupOf(ev.group);if(all.length<2)return Promise.resolve("one");
+  const later=all.filter(m=>m.start>=ev.start).length;
+  const V={change:"Change",move:"Move",resize:"Change the length of",delete:"Delete"}[verb];
+  return new Promise(res=>{let done=false;const pick=v=>{if(done)return;done=true;res(v);close();};
+    const body=h("div",{class:"body"},
+      h("p",{class:"warnline"},h("span",{class:"rep big"},"↻"),h("span",{},h("b",{text:ev.title})," is part of a repeating group of ",h("b",{text:`${all.length} activities`}),
+        ev.rep?` (${repSummary(ev.rep)})`:"",". Do you want to ",V.toLowerCase()," every activity in the group?")),
+      h("div",{class:"scopelist"},
+        h("button",{class:"btn",onclick:()=>pick("one")},h("b",{text:`${V} only this one`}),h("span",{text:shortDate(new Date(ev.start))+", "+hm(ev.start)})),
+        later>1&&later<all.length?h("button",{class:"btn",onclick:()=>pick("later")},h("b",{text:`${V} this one and the ${later-1} after it`}),h("span",{text:`From ${shortDate(new Date(ev.start))} onwards`})):null,
+        h("button",{class:"btn"+(verb==="delete"?" danger":""),onclick:()=>pick("all")},h("b",{text:`${V} all ${all.length} in the group`}),h("span",{text:`${shortDate(new Date(all[0].start))} – ${shortDate(new Date(all[all.length-1].start))}`}))));
+    const close=openSheet({title:"Repeating activity",body,foot:h("footer",{},h("button",{class:"btn",onclick:()=>pick(null)},"Cancel")),onClose:()=>pick(null)});});}
+function confirmSheet(title,text,okLabel,danger){return new Promise(res=>{let done=false;const pick=v=>{if(done)return;done=true;res(v);close();};
+  const close=openSheet({title,body:h("div",{class:"body"},h("p",{text})),onClose:()=>pick(false),
+    foot:h("footer",{},h("button",{class:"btn",onclick:()=>pick(false)},"Cancel"),h("button",{class:"btn "+(danger?"danger armed":"primary"),onclick:()=>pick(true)},okLabel))});});}
+
+/* Run a change that may touch many activities, with one Undo for all of it. */
+function withUndo(msg,fn){const before=new Map();
+  const track=id=>{if(!before.has(id))before.set(id,S.events.has(id)?clone(S.events.get(id)):null);};
+  fn(track);render();
+  toast(msg,"Undo",()=>{for(const[id,old]of before){if(old)putEvent(old);else if(S.events.has(id))dropEvent(id);}render();});}
+
+async function moveWithScope(ev,newStart){const scope=await askScope(ev,"move");if(!scope){render();return;}
+  const o=new Date(ev.start),n=new Date(newStart);
+  const dd=Math.round((sod(n)-sod(o))/DAY),md=(n.getHours()*60+n.getMinutes())-(o.getHours()*60+o.getMinutes());
+  const ms=scopedMembers(ev,scope);
+  withUndo(ms.length>1?`Moved ${ms.length} activities.`:`Moved to ${shortDate(n)}, ${hm(newStart)}.`,track=>{
+    for(const m of ms){track(m.id);const s=new Date(m.start);
+      const ns=m.id===ev.id?newStart:new Date(s.getFullYear(),s.getMonth(),s.getDate()+dd,s.getHours(),s.getMinutes()+md).getTime();
+      putEvent({...m,start:ns,end:ns+(m.end-m.start)});}});
+  S.selected=ev.id;render();}
+async function resizeWithScope(ev,newEnd){const scope=await askScope(ev,"resize");if(!scope){render();return;}
+  const dur=newEnd-ev.start;const ms=scopedMembers(ev,scope);
+  withUndo(ms.length>1?`${ms.length} activities now last ${durLabel(Math.round(dur/60000))}.`:`${ev.title} now ends at ${hm(newEnd)}.`,track=>{
+    for(const m of ms){track(m.id);putEvent({...m,end:m.start+dur});}});}
+async function deleteWithScope(ev){const scope=await askScope(ev,"delete");if(!scope)return;
+  const ms=scopedMembers(ev,scope);
+  withUndo(ms.length>1?`Deleted ${ms.length} activities.`:"Activity deleted.",track=>{for(const m of ms){track(m.id);dropEvent(m.id);}});
+  if(S.selected&&!S.events.has(S.selected))S.selected=null;render();}
+
 /* ---------- event editor ---------- */
 function zoneOptions(sel){return[h("option",{value:"system",selected:sel==="system"},`Your time (${SYS_TZ})`),
   ...S.settings.zones.map(z=>h("option",{value:z.tz,selected:sel===z.tz},`${z.label} (${z.tz}, ${offLabel(Date.now(),z.tz)})`))];}
-function editEvent(ev,{day,minute,endMinute}={}){
-  const isNew=!ev;
-  const srcZone=ev?.srcZone&&ev.srcZone!=="system"&&validTz(ev.srcZone)?ev.srcZone:"system";
+/* ev: the stored activity (null for new). draft: values to show instead, when coming back from a cancelled question. */
+function editEvent(ev,{day,minute,endMinute,draft}={}){
+  const isNew=!ev;const src=draft||ev;
+  const srcZone=src?.srcZone&&src.srcZone!=="system"&&validTz(src.srcZone)?src.srcZone:"system";
   let date,st,en;
-  if(ev){const a=utcToZoned(ev.start,srcZone),b=utcToZoned(ev.end,srcZone);date=a.date;st=a.time;en=b.time;}
+  if(src){const a=utcToZoned(src.start,srcZone),b=utcToZoned(src.end,srcZone);date=a.date;st=a.time;en=b.time;}
   else{const d=day||S.cursor;date=isoDate(d);st=`${pad(Math.floor(minute/60))}:${pad(minute%60)}`;const em=Math.min(endMinute!=null?endMinute:minute+60,23*60+59);en=`${pad(Math.floor(em/60))}:${pad(em%60)}`;}
-  let colorId=ev?.colorId||activePalette().colors[0]?.id||null;
-  const fTitle=h("input",{class:"inp",id:"evTitle",value:ev?.title||"",placeholder:"What's happening?"});
+  let colorId=src?.colorId||activePalette().colors[0]?.id||null;
+  const inGroup=!!ev?.group;const groupSize=inGroup?groupOf(ev.group).length:0;
+  const fTitle=h("input",{class:"inp",id:"evTitle",value:src?.title||"",placeholder:"What's happening?"});
   const fDate=h("input",{class:"inp",type:"date",id:"evDate",value:date});
   const fStart=h("input",{class:"inp",type:"time",id:"evStart",value:st});
   const fEnd=h("input",{class:"inp",type:"time",id:"evEnd",value:en});
   const fZone=h("select",{class:"inp",id:"evZone"},zoneOptions(srcZone));
-  const fNotes=h("textarea",{class:"inp",id:"evNotes",rows:"2",placeholder:"Notes, links, who's coming…"});fNotes.value=ev?.notes||"";
+  const fNotes=h("textarea",{class:"inp",id:"evNotes",rows:"2",placeholder:"Notes, links, who's coming…"});fNotes.value=src?.notes||"";
   const conv=h("div",{class:"conv"});
   const sws=h("div",{class:"swatches",role:"radiogroup","aria-label":"Colour"});
   const drawSw=()=>{const pal=activePalette().colors.slice();if(colorId&&!pal.find(c=>c.id===colorId)){const c=colourOf(colorId);if(c.id)pal.push(c);}
     sws.replaceChildren(...pal.map(c=>h("button",{type:"button",class:"sw",role:"radio","aria-checked":String(c.id===colorId),style:`--c:${c.hex}`,onclick:()=>{colorId=c.id;drawSw();}},h("i"),c.name)));};
   drawSw();
+
+  /* repeat settings */
+  const srcRep=draft?draft.rep:ev?.rep;
+  let repOn=!!srcRep;
+  const days=new Set(srcRep?srcRep.days:[wdIdx(fromIso(date))]);
+  let daysTouched=!!srcRep;/* until the person picks days, follow the activity's own weekday */
+  let preset=srcRep?(srcRep.preset||"custom"):"week";
+  const fUntil=h("input",{class:"inp",type:"date",id:"evUntil",value:srcRep?.until||addIso(date,13)});
+  const repFrom=()=>inGroup&&ev.rep?ev.rep.from:fDate.value;
+  const repUntil=()=>preset==="custom"?fUntil.value:presetUntil(repFrom(),preset);
+  const repBox=h("div",{class:"repeat"});const repSum=h("p",{class:"repsum"});
+  const ruleChanged=()=>inGroup&&ev.rep&&(!repOn||[...days].sort().join()!==[...ev.rep.days].sort().join()||repUntil()!==ev.rep.until);
+  const repProblem=()=>{if(!repOn)return null;if(!days.size)return"Pick at least one day.";const u=repUntil();
+    if(!u||u<repFrom())return"The end date is before the first day.";if(isoDiff(repFrom(),u)>MAX_REPEAT_DAYS)return"Repeats can run for up to a year.";
+    if(!repeatDates(repFrom(),u,[...days]).length)return"None of the chosen days fall in that period.";return null;};
+  function drawRep(){
+    const seg=h("div",{class:"seg small",role:"group","aria-label":"Repeat"},
+      h("button",{type:"button","aria-pressed":String(!repOn),onclick:()=>{repOn=false;drawRep();}},"Doesn't repeat"),
+      h("button",{type:"button","aria-pressed":String(repOn),onclick:()=>{repOn=true;drawRep();}},"Repeat"));
+    const kids=[h("div",{class:"rephead"},h("span",{class:"lbl",text:"Repeat"}),seg)];
+    if(repOn){
+      kids.push(h("div",{class:"daychips",role:"group","aria-label":"Days"},DAYNAMES.map((n,i)=>h("button",{type:"button",class:"daychip","aria-pressed":String(days.has(i)),"aria-label":n,
+          onclick:()=>{daysTouched=true;days.has(i)?days.delete(i):days.add(i);drawRep();}},n.slice(0,2))),
+        h("button",{type:"button",class:"btn ghost tiny",onclick:()=>{daysTouched=true;days.clear();[0,1,2,3,4].forEach(i=>days.add(i));drawRep();}},"Weekdays"),
+        h("button",{type:"button",class:"btn ghost tiny",onclick:()=>{daysTouched=true;for(let i=0;i<7;i++)days.add(i);drawRep();}},"Every day")));
+      const sel=h("select",{class:"inp",id:"evRepFor",onchange:e=>{preset=e.target.value;if(preset==="custom"&&!fUntil.value)fUntil.value=addIso(repFrom(),13);drawRep();}},
+        [["week","Only this week"],["2weeks","For the next 2 weeks"],["month","For the next month"],["custom","Until a date…"]].map(([v,l])=>h("option",{value:v,selected:preset===v},l)));
+      kids.push(h("div",{class:"row"},h("label",{class:"f"},"For how long",sel),preset==="custom"?h("label",{class:"f"},"Last day",fUntil):h("div",{class:"f untilnote"},"Last day",h("b",{text:shortDate(fromIso(repUntil()))}))));
+    }
+    const prob=repProblem();
+    if(repOn){const n=prob?0:repeatDates(repFrom(),repUntil(),[...days]).length;
+      repSum.className="repsum"+(prob?" bad":"");
+      repSum.textContent=prob||(inGroup?(ruleChanged()?`Saving rebuilds the group as ${n} activities, ${daysLabel(days)} from ${shortDate(fromIso(repFrom()))} to ${shortDate(fromIso(repUntil()))}.`:`${groupSize} activities in this group, ${repSummary(ev.rep)}.`)
+        :`Adds ${n} ${n===1?"activity":"activities"}, ${daysLabel(days)} from ${shortDate(fromIso(repFrom()))} to ${shortDate(fromIso(repUntil()))}.`);
+      kids.push(repSum);}
+    else if(inGroup){repSum.className="repsum";repSum.textContent="Saving takes only this activity out of its repeating group. The others stay as they are.";kids.push(repSum);}
+    repBox.replaceChildren(...kids);updSave();}
+  fUntil.addEventListener("input",drawRep);fDate.addEventListener("input",()=>{if(!daysTouched&&fDate.value){days.clear();days.add(wdIdx(fromIso(fDate.value)));}drawRep();});
+
   const times=()=>{const tz=fZone.value;if(!fDate.value||!fStart.value||!fEnd.value)return null;let s=zonedToUtc(fDate.value,fStart.value,tz),e=zonedToUtc(fDate.value,fEnd.value,tz);if(e<=s)e+=DAY;return{s,e,tz};};
   const upd=()=>{const t=times();if(!t){conv.textContent="Pick a date and times.";return;}
     const sd=new Date(t.s),ed=new Date(t.e);
     conv.replaceChildren(t.tz==="system"?"Shows in your calendar as ":`Entered in ${zoneLabel(t.tz)} time. Shows in your calendar as `,
       h("b",{text:`${shortDate(sd)}, ${hm(t.s)}–${hm(t.e)}${sameDay(sd,ed)?"":" ("+shortDate(ed)+")"}`})," · "+SYS_TZ+".");};
   [fDate,fStart,fEnd,fZone].forEach(f=>f.addEventListener("input",upd));upd();
+
+  const saveBtn=h("button",{class:"btn primary"});
+  function updSave(){const prob=repProblem();saveBtn.disabled=!!prob;
+    if(isNew&&repOn&&!prob){const n=repeatDates(repFrom(),repUntil(),[...days]).length;saveBtn.textContent=`Add ${n} ${n===1?"activity":"activities"}`;}
+    else saveBtn.textContent=isNew?"Add activity":"Save";}
+
   const body=h("div",{class:"body"},
     h("label",{class:"f"},"Title",fTitle),
-    h("div",{class:"row"},h("label",{class:"f"},"Date",fDate),h("label",{class:"f"},"Starts",fStart),h("label",{class:"f"},"Ends",fEnd)),
-    h("label",{class:"f"},"Time zone you're entering in",fZone),conv,
+    h("div",{class:"row"},h("label",{class:"f"},inGroup?"Date of this one":repOn?"First day":"Date",fDate),h("label",{class:"f"},"Starts",fStart),h("label",{class:"f"},"Ends",fEnd)),
+    h("label",{class:"f"},"Time zone you're entering in",fZone),conv,repBox,
     h("div",{class:"f",style:"display:flex;flex-direction:column;gap:6px;font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em"},"Colour · "+activePalette().name,sws),
     h("label",{class:"f"},"Notes",fNotes));
+  drawRep();
   let close;
-  const save=()=>{const t=times();if(!t){toast("Add a date, a start and an end time.");return;}
-    const next={id:ev?.id||"e_"+uid(),title:fTitle.value.trim()||"Untitled",start:t.s,end:t.e,srcZone:t.tz,colorId,notes:fNotes.value.trim()};
-    putEvent(next);close();render();toast(isNew?"Activity added.":"Activity saved.");};
-  const del=h("button",{class:"btn danger",onclick:()=>{if(!del.classList.contains("armed")){del.classList.add("armed");del.textContent="Tap again to delete";return;}
-    const old=clone(ev);dropEvent(ev.id);close();render();toast("Activity deleted.","Undo",()=>{putEvent(old);render();});}},"Delete");
-  const copy=h("button",{class:"btn",onclick:()=>{const src=ev||{title:fTitle.value||"Untitled",colorId,notes:fNotes.value,srcZone:fZone.value,...(()=>{const t=times();return{start:t.s,end:t.e};})()};
-    close();setClip({span:"event",label:`"${src.title}"`,items:toItems([src],sod(new Date(src.start)))});}},"Copy");
-  const foot=h("footer",{},h("div",{class:"left"},isNew?null:del,isNew?null:copy),h("button",{class:"btn",onclick:()=>close()},"Cancel"),h("button",{class:"btn primary",onclick:save},isNew?"Add activity":"Save"));
+  const save=async()=>{const t=times();if(!t){toast("Add a date, a start and an end time.");return;}if(repProblem()){toast(repProblem());return;}
+    const base={title:fTitle.value.trim()||"Untitled",srcZone:t.tz,colorId,notes:fNotes.value.trim()};
+    const rule=repOn?{days:[...days].sort(),from:repFrom(),until:repUntil(),preset}:null;
+    const draftNow={...base,id:ev?.id,start:t.s,end:t.e,group:ev?.group,rep:rule};
+    const occ=(d,id,group)=>{const s=zonedToUtc(d,fStart.value,t.tz);let e=zonedToUtc(d,fEnd.value,t.tz);if(e<=s)e+=DAY;return{...base,id,start:s,end:e,group,rep:rule};};
+    const reopen=()=>editEvent(ev,{draft:draftNow});
+    /* 1. a single activity, new or existing, that doesn't repeat */
+    if(!repOn&&!inGroup){const next={...base,id:ev?.id||"e_"+uid(),start:t.s,end:t.e};putEvent(next);close();render();toast(isNew?"Activity added.":"Activity saved.");return;}
+    /* 2. start repeating: a new activity, or an existing single one */
+    if(repOn&&!inGroup){const group="g_"+uid();const dates=repeatDates(rule.from,rule.until,rule.days);close();
+      withUndo(`Added ${dates.length} repeating ${dates.length===1?"activity":"activities"}.`,track=>{
+        let reused=false;for(const d of dates){const id=(!isNew&&!reused&&d===fDate.value)?(reused=true,ev.id):"e_"+uid();track(id);putEvent(occ(d,id,group));}
+        if(!isNew&&!reused){track(ev.id);dropEvent(ev.id);}});return;}
+    /* 3. take one activity out of its group */
+    if(!repOn&&inGroup){close();withUndo("Activity saved and taken out of its group.",track=>{track(ev.id);const{group,rep,...rest}=S.events.get(ev.id)||ev;putEvent({...rest,...base,start:t.s,end:t.e});});return;}
+    /* 4. the repeat days or period changed: rebuild the whole group */
+    if(ruleChanged()){const members=groupOf(ev.group);const dates=repeatDates(rule.from,rule.until,rule.days);
+      const ok=await confirmSheet("Rebuild the repeating group?",`This replaces all ${members.length} activities in the group with ${dates.length}, ${daysLabel(rule.days)} from ${shortDate(fromIso(rule.from))} to ${shortDate(fromIso(rule.until))}, using the details you entered. Changes made to single activities in the group are replaced.`,"Rebuild group");
+      if(!ok){reopen();return;}
+      const byDate=new Map(members.map(m=>[utcToZoned(m.start,t.tz).date,m]));
+      withUndo(`Group rebuilt: ${dates.length} activities.`,track=>{const keep=new Set();
+        for(const d of dates){const old=byDate.get(d);const id=old?old.id:"e_"+uid();keep.add(id);track(id);putEvent(occ(d,id,ev.group));}
+        for(const m of members)if(!keep.has(m.id)){track(m.id);dropEvent(m.id);}});return;}
+    /* 5. same rule, details changed: ask how far it reaches */
+    const scope=await askScope(ev,"change");if(!scope){reopen();return;}
+    const ms=scopedMembers(ev,scope);const dayShift=isoDiff(utcToZoned(ev.start,t.tz).date,fDate.value);
+    /* only carry over what was actually changed, so activities edited one by one keep their own details */
+    const patch={};for(const k of["title","colorId","notes"])if(base[k]!==(ev[k]||(k==="notes"?"":ev[k])))patch[k]=base[k];
+    const timeChanged=t.s!==ev.start||t.e!==ev.end||t.tz!==(ev.srcZone||"system");
+    withUndo(ms.length>1?`Saved ${ms.length} activities.`:"Activity saved.",track=>{
+      for(const m of ms){track(m.id);
+        if(m.id===ev.id){putEvent({...m,...base,start:t.s,end:t.e});continue;}
+        if(timeChanged){const d=addIso(utcToZoned(m.start,t.tz).date,dayShift);const o=occ(d,m.id,m.group);putEvent({...m,...patch,srcZone:t.tz,start:o.start,end:o.end});}
+        else putEvent({...m,...patch});}});
+  };
+  saveBtn.onclick=save;
+  const del=h("button",{class:"btn danger",onclick:()=>{if(inGroup){close();deleteWithScope(ev);return;}
+    if(!del.classList.contains("armed")){del.classList.add("armed");del.textContent="Tap again to delete";return;}
+    close();deleteWithScope(ev);}},"Delete");
+  const copy=h("button",{class:"btn",onclick:()=>{const src2=ev||{title:fTitle.value||"Untitled",colorId,notes:fNotes.value,srcZone:fZone.value,...(()=>{const t=times();return{start:t.s,end:t.e};})()};
+    close();setClip({span:"event",label:`"${src2.title}"`,items:toItems([src2],sod(new Date(src2.start)))});}},"Copy");
+  const foot=h("footer",{},h("div",{class:"left"},isNew?null:del,isNew?null:copy),h("button",{class:"btn",onclick:()=>close()},"Cancel"),saveBtn);
   body.addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target===fTitle)save();});
-  close=openSheet({title:isNew?"New activity":"Edit activity",body,foot});
+  close=openSheet({title:isNew?"New activity":inGroup?`Edit repeating activity`:"Edit activity",body,foot});
 }
 
 /* ---------- paste plans (text import) ---------- */
@@ -584,6 +730,8 @@ async function checkForUpdate(){if(IS_DEV||location.protocol==="file:")return;
     if(!busy&&document.visibilityState==="visible"){location.reload();return;}
     if(!updateShown){updateShown=true;toast("A new version of J's Ournal is ready.","Update now",()=>location.reload());}}catch{}}
 
+/* test hook (no data beyond what this device already shows) */
+window.__jsournal={S,editEvent,commitMove,deleteSelected,render};
 /* ---------- go ---------- */
 render();
 setInterval(()=>{if(S.view!=="month"&&!$("#sheetRoot").childElementCount&&!document.querySelector(".ev.moving,.ev.resizing,.col.dragging"))render();},60000);
