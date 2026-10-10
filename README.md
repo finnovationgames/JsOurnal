@@ -2,6 +2,11 @@
 
 A private calendar for J. It installs on an iPhone and a PC like a normal app, works offline, updates itself, and keeps both devices in sync.
 
+**The app:** <https://finnovationgames.github.io/JsOurnal/>
+**Encrypted sync data:** the private repository `finnovationgames/jsournal-data`
+
+Parts 1 and the repository half of Part 2 are already done. What's left is the access token (Part 2, step 2) and installing on J's devices (Parts 3 and 4).
+
 **How the privacy works:** the calendar is encrypted on each device with J's passphrase before anything leaves it. The encrypted file is kept in a private GitHub repository, which acts only as a relay between the devices. GitHub (and anyone else) sees scrambled data, never the activities. The app uses no Google services, no analytics and no external fonts.
 
 ---

@@ -64,7 +64,7 @@ const boot=loadLocal();
 const S={settings:boot.settings,settingsAt:boot.settingsAt,events:boot.events,tombs:boot.tombs,view:"week",cursor:sod(new Date()),clip:null,selected:null,moving:null,
   sync:{cfg:null,state:"off",last:0,error:null}};
 try{const c=JSON.parse(lsGet(LS_SYNC)||"null");if(c&&c.owner&&c.key){S.sync.cfg=c;S.sync.state="idle";}}catch{}
-try{const v=lsGet(LS+".view");if(["day","week","month"].includes(v))S.view=v;}catch{}
+try{const v=lsGet(LS+".view");if(["day","week","month"].includes(v))S.view=v;else if(matchMedia("(max-width: 700px)").matches)S.view="day";}catch{}
 
 /* ---------- persistence: this device first, then encrypted sync ---------- */
 function saveLocal(){if(!lsSet(LS,JSON.stringify({settings:S.settings,settingsAt:S.settingsAt,events:[...S.events.values()],tombs:S.tombs})))toast("This device is out of storage space. Delete old activities or make room.");}
@@ -187,25 +187,24 @@ let suppressClick=false;
 const fmtMin=m=>m>=1440?"24:00":`${pad(Math.floor(m/60))}:${pad(m%60)}`;
 const durLabel=m=>{const H=Math.floor(m/60),M=m%60;return H&&M?`${H} h ${M} min`:H?`${H} h`:`${M} min`;};
 
+const narrow=()=>matchMedia("(max-width: 700px)").matches;
+function secondaryActions(span){/* [label, handler] — shown inline on wide screens, behind More on phones */
+  return[span!=="month"&&[`Copy ${span}`,()=>copyRange(span)],[`Copy ${span} as text`,()=>copyAsText(span)],
+    span==="day"&&["Save day as template",saveDayTemplate],["Templates",()=>openSettings("templates")],null,
+    ["Colours",()=>openSettings("palettes")],["Time zones",()=>openSettings("zones")],["Devices & sync",()=>openSettings("sync")]].filter(x=>x!==false);}
+function openMore(span){const close=openSheet({title:"More",body:h("div",{class:"body"},h("div",{class:"morelist"},
+  secondaryActions(span).filter(Boolean).map(([label,fn])=>h("button",{class:"btn",onclick:()=>{close();fn();}},label))))});}
 function renderActions(){
   const span=S.view==="day"?"day":S.view==="week"?"week":"month";
   const status=h("div",{class:"status"},
     h("button",{class:"chipbtn",id:"syncChip",onclick:()=>openSettings("sync")}),
-    h("i",{},"Palette: "+activePalette().name));
-  $("#actions").replaceChildren(
-    h("button",{class:"btn primary",onclick:()=>editEvent(null,{day:S.cursor,minute:9*60})},"+ New activity"),
-    h("button",{class:"btn",onclick:openImport},"Paste plans"),
-    h("span",{class:"sep"}),
-    span!=="month"?h("button",{class:"btn",onclick:()=>copyRange(span)},`Copy ${span}`):null,
-    h("button",{class:"btn",onclick:()=>copyAsText(span)},`Copy ${span} as text`),
-    span==="day"?h("button",{class:"btn",onclick:saveDayTemplate},"Save day as template"):null,
-    h("button",{class:"btn",onclick:()=>openSettings("templates")},"Templates"),
-    h("span",{class:"sep"}),
-    h("button",{class:"btn",onclick:()=>openSettings("palettes")},"Colours"),
-    h("button",{class:"btn",onclick:()=>openSettings("zones")},"Time zones"),
-    h("button",{class:"btn",onclick:()=>openSettings("sync")},"Devices & sync"),
-    installBtn(),
-    status);
+    narrow()?null:h("i",{},"Palette: "+activePalette().name));
+  const items=[h("button",{class:"btn primary",onclick:()=>editEvent(null,{day:S.cursor,minute:9*60})},narrow()?"+ New":"+ New activity"),
+    h("button",{class:"btn",onclick:openImport},"Paste plans")];
+  if(narrow())items.push(h("button",{class:"btn",onclick:()=>openMore(span)},"More"));
+  else{items.push(h("span",{class:"sep"}));for(const a of secondaryActions(span))items.push(a?h("button",{class:"btn",onclick:a[1]},a[0]):h("span",{class:"sep"}));}
+  items.push(installBtn(),status);
+  $("#actions").replaceChildren(...items.filter(Boolean));
   renderSyncChip();
 }
 
@@ -531,7 +530,7 @@ function drawSync(redraw){
       catch(e){toast(e.message||"Couldn't link. Check your connection and try again.");linkBtn.disabled=false;linkBtn.textContent="Link this device";}}},"Link this device");
     out.push(h("div",{class:"syncstate"},h("span",{class:"dot"}),h("div",{},h("b",{text:"This calendar is only on this device"}),h("p",{class:"hint",text:"Link your devices so the same calendar shows on your phone and computer. Everything is encrypted before it leaves the device."}))),
       h("h3",{class:"sub",text:"Already set up on another device?"}),h("p",{class:"hint",text:"Paste the link code from that device's Devices & sync page."}),code,h("div",{},linkBtn));
-    const owner=h("input",{class:"inp",id:"ghOwner",autocomplete:"off",autocapitalize:"off",placeholder:"your GitHub username"});
+    const owner=h("input",{class:"inp",id:"ghOwner",autocomplete:"off",autocapitalize:"off",placeholder:"your GitHub username",value:/\.github\.io$/.test(location.hostname)?location.hostname.split(".")[0]:""});
     const repo=h("input",{class:"inp",id:"ghRepo",autocomplete:"off",autocapitalize:"off",value:"jsournal-data"});
     const token=h("input",{class:"inp",type:"password",id:"ghToken",autocomplete:"off",placeholder:"github_pat_…"});
     const p1=h("input",{class:"inp",type:"password",id:"pass1",autocomplete:"new-password"});
@@ -588,6 +587,7 @@ async function checkForUpdate(){if(IS_DEV||location.protocol==="file:")return;
 /* ---------- go ---------- */
 render();
 setInterval(()=>{if(S.view!=="month"&&!$("#sheetRoot").childElementCount&&!document.querySelector(".ev.moving,.ev.resizing,.col.dragging"))render();},60000);
+matchMedia("(max-width: 700px)").addEventListener("change",()=>renderActions());
 /* sync on open, when coming back to the app, when back online, and every 90 s while open */
 runSync();
 document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"){runSync();checkForUpdate();}});
