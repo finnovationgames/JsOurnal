@@ -1,0 +1,40 @@
+# Publishes J's Ournal to GitHub Pages on every push to main.
+# It stamps a version number into the app, which is how installed copies notice an update and refresh themselves.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stamp version
+        run: |
+          VERSION="$(date -u +%Y.%m.%d)-${GITHUB_RUN_NUMBER}"
+          mkdir -p site
+          cp index.html app.css app.js sync.js sw.js manifest.webmanifest *.png *.woff2 site/
+          sed -i "s/__VERSION__/${VERSION}/g" site/index.html site/app.js
+          echo "${VERSION}" > site/version.txt
+          touch site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deployment
+        uses: actions/deploy-pages@v4
