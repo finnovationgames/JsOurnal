@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.github.com; manifest-src 'self'; worker-src 'self'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<title>J's Ournal</title>
+<meta name="description" content="A private calendar for J that syncs between phone and computer, encrypted end to end.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="J's Ournal">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#E9EDF4">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0F121A">
+<link rel="preload" href="bricolage-grotesque-latin-800-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="app.css?v=__VERSION__">
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand"><b>J</b>'s Ournal<small id="tzline"></small></div>
+    <div class="nav">
+      <button class="btn" id="todayBtn">Today</button>
+      <button class="btn icon" id="prevBtn" aria-label="Previous">‹</button>
+      <button class="btn icon" id="nextBtn" aria-label="Next">›</button>
+      <div class="period" id="period"></div>
+    </div>
+    <div class="seg" role="group" aria-label="View">
+      <button data-view="day">Day</button><button data-view="week">Week</button><button data-view="month">Month</button>
+    </div>
+  </header>
+  <div class="actions" id="actions"></div>
+  <main id="main"></main>
+</div>
+<div id="pastebar" hidden></div>
+<div id="toast" hidden></div>
+<div id="sheetRoot"></div>
+<script src="sync.js?v=__VERSION__"></script>
+<script src="app.js?v=__VERSION__"></script>
+</body>
+</html>
